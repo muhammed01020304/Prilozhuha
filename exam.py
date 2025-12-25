@@ -2,34 +2,19 @@ import streamlit as st
 import google.generativeai as genai
 import random
 
-# --- НАСТРОЙКА СТРАНИЦЫ ---
-st.set_page_config(page_title="AIS Exam Master", page_icon="🎓")
+# --- КОНФИГУРАЦИЯ СТРАНИЦЫ ---
+st.set_page_config(page_title="AIS Exam Master v2.4", page_icon="🎓", layout="centered")
 
-# --- ИНИЦИАЛИЗАЦИЯ ИИ ---
+# --- НАСТРОЙКА ИИ ---
 if "GEMINI_KEY" in st.secrets:
-    genai.configure(api_key=st.secrets["GEMINI_KEY"])
+    API_KEY = st.secrets["GEMINI_KEY"]
 else:
-    st.error("❌ Ключ не найден в Secrets!")
+    st.error("Ошибка: API-ключ не найден в Secrets!")
     st.stop()
 
-# Функция для вызова ИИ с автоматическим подбором рабочей модели
-def ask_ai(prompt):
-    # Пробуем модели из твоего списка доступных
-    models_to_try = ['gemini-flash-latest']
-    
-    last_error = ""
-    for model_name in models_to_try:
-        try:
-            # Создаем модель
-            model = genai.GenerativeModel(model_name)
-            # Пытаемся получить ответ
-            response = model.generate_content(prompt)
-            return response.text
-        except Exception as e:
-            last_error = str(e)
-            continue # Если ошибка, пробуем следующую модель
-            
-    return f"🛑 Ошибка Google: {last_error}\n\nПопробуйте перезагрузить страницу или проверить ключ."
+genai.configure(api_key=API_KEY)
+model = genai.GenerativeModel('gemini-flash-latest')
+
 # --- ПОЛНАЯ БАЗА ДАННЫХ ЭКЗАМЕНА (25 БИЛЕТОВ) ---
 tickets_data = {
     "1": {
@@ -52,7 +37,7 @@ tickets_data = {
         "q1": "Этапы установки ОС", 
         "a1": "Подготовка, загрузка с носителя, разметка диска, копирование файлов, настройка параметров и установка драйверов.", 
         "q2": "Типы загрузочных носителей", 
-        "a2": "USB-флешки, оптические диски, сетевая установка (PXE), внешние жесткие диски.", 
+        "a2": "USB-флешки, оптические диски (CD/DVD), сетевая установка (PXE), внешние жесткие диски.", 
         "pract": "Создать структуру загрузочной флешки.",
         "p_sol": "1. Выбрать утилиту (Rufus/Ventoy).\n2. Выбрать образ ISO.\n3. Указать схему раздела (GPT для новых ПК, MBR для старых).\n4. Нажать 'Старт'."
     },
@@ -235,76 +220,122 @@ tickets_data = {
 }
 
 # --- ИНТЕРФЕЙС ---
-st.title("🚀 AIS Exam Master")
+st.title("🚀 AIS Exam Master v2.4")
+st.caption("Твой мобильный и десктопный тренажер")
 
-tab_study, tab_exam, tab_lab, tab_any = st.tabs(["📖 УЧИТЬ", "🎫 ЭКЗАМЕН", "🧪 AI ЛАБ", "🌍 ТЕМЫ"])
+tab_study, tab_exam, tab_lab, tab_any = st.tabs([
+    "📖 УЧИТЬ ТЕОРИЮ", "🎫 ЭКЗАМЕН", "🧪 AI ЛАБОРАТОРИЯ", "🌍 ЛЮБАЯ ТЕМА"
+])
 
+# --- 1. ВКЛАДКА: УЧИТЬ ТЕОРИЮ ---
 with tab_study:
-    st.info("Здесь ты можешь учить теорию и смотреть правильные шаги практики.")
-    for num, data in tickets_data.items():
-        with st.expander(f"БИЛЕТ №{num}"):
-            st.write(f"**В1:** {data['q1']}")
-            st.markdown(f"*{data['a1']}*")
-            st.write(f"**В2:** {data['q2']}")
-            st.markdown(f"*{data['a2']}*")
-            st.success(f"**Практика:** {data['pract']}")
+    st.header("Справочник: Теория + Практика")
+    for num in sorted(tickets_data.keys(), key=int):
+        data = tickets_data[num]
+        with st.expander(f"📘 БИЛЕТ №{num}"):
+            st.markdown(f"**Вопрос 1:** {data['q1']}")
+            st.info(data['a1'])
+            st.markdown(f"**Вопрос 2:** {data['q2']}")
+            st.info(data['a2'])
+            st.markdown("**🛠 ПРАКТИЧЕСКОЕ ЗАДАНИЕ:**")
+            st.success(data['pract'])
+            st.markdown("**📝 АЛГОРИТМ ВЫПОЛНЕНИЯ:**")
             st.code(data['p_sol'])
 
+# --- 2. ВКЛАДКА: ЭКЗАМЕН ---
 with tab_exam:
-    if 'ticket' not in st.session_state: st.session_state.ticket = None
-    if 'step' not in st.session_state: st.session_state.step = 1
+    if 'ex_ticket' not in st.session_state:
+        st.session_state.ex_ticket = None
+        st.session_state.ex_step = 1
 
-    if st.button("🎲 Вытянуть новый билет"):
-        st.session_state.ticket = random.choice(list(tickets_data.keys()))
-        st.session_state.step = 1
+    if st.button("🎲 Тянуть новый билет"):
+        st.session_state.ex_ticket = random.choice(list(tickets_data.keys()))
+        st.session_state.ex_step = 1
         st.rerun()
 
-    if st.session_state.ticket:
-        t = tickets_data[st.session_state.ticket]
-        st.warning(f"Билет №{st.session_state.ticket} | Вопрос {st.session_state.step}/3")
+    if st.session_state.ex_ticket:
+        t_num = st.session_state.ex_ticket
+        step = st.session_state.ex_step
+        data = tickets_data[t_num]
         
-        q = t['q1'] if st.session_state.step == 1 else (t['q2'] if st.session_state.step == 2 else t['pract'])
+        st.warning(f"Билет №{t_num} | Шаг {step} из 3")
+        
+        if step == 1: q, ref = data['q1'], data['a1']
+        elif step == 2: q, ref = data['q2'], data['a2']
+        else: q, ref = f"ПРАКТИКА: {data['pract']}", data['p_sol']
+        
         st.subheader(q)
-        ans = st.text_area("Твой ответ:", key=f"ans_{st.session_state.step}_{st.session_state.ticket}")
+        user_ans = st.text_area("Твой ответ:", key=f"ans_step_{step}_{t_num}")
         
-        if st.button("✅ Проверить"):
+        if st.button("✅ Проверить ответ"):
             with st.spinner("ИИ анализирует..."):
-                ref = t['a1'] if st.session_state.step == 1 else (t['a2'] if st.session_state.step == 2 else t['p_sol'])
-                res = ask_ai(f"Вопрос: {q}. Эталон: {ref}. Ответ студента: {ans}. Оцени кратко.")
+                prompt = f"Вопрос: {q}\nЭталон: {ref}\nОтвет студента: {user_ans}\nОцени смысл, укажи на ошибки и дай совет."
+                res = model.generate_content(prompt).text
+                st.markdown("### 🤖 Разбор ИИ:")
                 st.write(res)
-                if "🛑 Ошибка" not in res:
-                    if st.session_state.step < 3:
-                        if st.button("Далее 👉"):
-                            st.session_state.step += 1
-                            st.rerun()
-                    else:
-                        st.balloons()
-                        st.success("Билет завершен!")
+                
+                if step < 3:
+                    if st.button("Далее 👉"):
+                        st.session_state.ex_step += 1
+                        st.rerun()
+                else:
+                    st.balloons()
+                    st.success("Билет полностью пройден!")
 
+# --- 3. ВКЛАДКА: AI ЛАБОРАТОРИЯ ---
 with tab_lab:
     st.header("Генератор задач")
-    topic = st.selectbox("Выбери тему:", ["ИБ", "Бэкапы", "Установка ПО", "Мониторинг"])
-    if st.button("⚡ Создать задачу"):
-        with st.spinner("Генерирую..."):
-            st.session_state.l_q = ask_ai(f"Задай одну сложную практическую задачу по теме {topic} для специалиста АИС.")
+    topic = st.selectbox("Тема:", ["ИБ", "Бэкапы", "Установка ПО", "Мониторинг", "Администрирование"])
+    diff = st.select_slider("Сложность:", ["Легко", "Средне", "Сложно"])
     
-    if 'l_q' in st.session_state:
-        st.info(st.session_state.l_q)
-        l_ans = st.text_area("Твое решение:")
-        if st.button("🎯 Оценить"):
-            st.write(ask_ai(f"Задача: {st.session_state.l_q}\nРешение студента: {l_ans}. Проверь и поставь оценку."))
+    if st.button("⚡ Создать уникальную задачу"):
+        with st.spinner("Генерирую..."):
+            prompt = f"Задай одну практическую задачу по техподдержке АИС. Тема: {topic}, сложность: {diff}."
+            st.session_state.lab_q = model.generate_content(prompt).text
+    
+    if 'lab_q' in st.session_state:
+        st.info(st.session_state.lab_q)
+        ans_lab = st.text_area("Твое решение задачи:")
+        if st.button("🎯 Оценить решение"):
+            with st.spinner("Проверка..."):
+                res = model.generate_content(f"Задача: {st.session_state.lab_q}\nОтвет: {ans_lab}. Проверь.").text
+                st.write(res)
 
+# --- 4. ВКЛАДКА: ЛЮБАЯ ТЕМА ---
 with tab_any:
-    topic_any = st.text_input("Тема викторины (например: Minecraft или Плов):")
-    if st.button("Задать вопрос"):
-        with st.spinner("Пишу..."):
-            st.write(ask_ai(f"Задай 1 короткий вопрос по теме {topic_any}."))
+    st.header("Викторина на любую тему")
+    if 'any_count' not in st.session_state: st.session_state.any_count = 0
+    
+    any_topic = st.text_input("Впиши тему (например: Игры, Кулинария, Космос):")
+    
+    if st.button("🚀 Начать викторину (10 вопросов)"):
+        st.session_state.any_count = 1
+        st.session_state.any_topic = any_topic
+        st.rerun()
 
-
-
-
-
-
-
-
-
+    if st.session_state.any_count > 0 and st.session_state.any_count <= 10:
+        curr_topic = st.session_state.any_topic
+        curr_num = st.session_state.any_count
+        st.write(f"**Вопрос {curr_num} / 10** по теме: {curr_topic}")
+        
+        # Генерируем вопрос один раз и сохраняем
+        if f'q_{curr_num}' not in st.session_state:
+            with st.spinner("ИИ придумывает вопрос..."):
+                q_text = model.generate_content(f"Задай 1 короткий вопрос по теме {curr_topic}. №{curr_num}").text
+                st.session_state[f'q_{curr_num}'] = q_text
+        
+        st.subheader(st.session_state[f'q_{curr_num}'])
+        ans_any = st.text_input("Твой ответ:", key=f"any_input_{curr_num}")
+        
+        if st.button("🎯 Проверить мой ответ"):
+            with st.spinner("Проверка..."):
+                res = model.generate_content(f"Вопрос: {st.session_state[f'q_{curr_num}']}\nОтвет: {ans_any}. Кратко.").text
+                st.write(res)
+                if st.button("Дальше ⏭"):
+                    st.session_state.any_count += 1
+                    st.rerun()
+    elif st.session_state.any_count > 10:
+        st.success("Викторина завершена!")
+        if st.button("Заново 🔄"):
+            st.session_state.any_count = 0
+            st.rerun()
