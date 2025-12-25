@@ -15,7 +15,7 @@ else:
 # Функция для вызова ИИ с автоматическим подбором рабочей модели
 def ask_ai(prompt):
     # Пробуем модели из твоего списка доступных
-    models_to_try = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-pro']
+    models_to_try = ['gemini-flash-latest']
     
     last_error = ""
     for model_name in models_to_try:
@@ -299,6 +299,7 @@ with tab_any:
     if st.button("Задать вопрос"):
         with st.spinner("Пишу..."):
             st.write(ask_ai(f"Задай 1 короткий вопрос по теме {topic_any}."))
+
 
 
 
