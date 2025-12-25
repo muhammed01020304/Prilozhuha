@@ -18,7 +18,7 @@ else:
 # Кэшируем модель, чтобы не создавать её 100 раз
 @st.cache_resource
 def get_ai_model():
-    return genai.GenerativeModel('gemini-1.5-flash')
+    return genai.GenerativeModel('gemini-2.0-flash')
 
 model = get_ai_model()
 
@@ -345,6 +345,7 @@ with tab_any:
             st.session_state.any_count = 0
 
             st.rerun()
+
 
 
 
