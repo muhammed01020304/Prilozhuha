@@ -9,7 +9,11 @@ if "GEMINI_KEY" not in st.secrets:
 st.set_page_config(page_title="AIS Exam Master", page_icon="🎓", layout="centered")
 
 # --- НАСТРОЙКА ИИ ---
-API_KEY = "AIzaSyCO-603WRcT3kIQasC9o1DBBTRRXJEcAr8" 
+if "GEMINI_KEY" in st.secrets:
+    API_KEY = st.secrets["GEMINI_KEY"]
+else:
+    st.error("Ошибка: API-ключ не найден в настройках сервера!")
+    st.stop()
 genai.configure(api_key=API_KEY)
 model = genai.GenerativeModel('gemini-flash-latest')
 
@@ -336,3 +340,4 @@ with tab_any:
             st.session_state.any_count = 0
 
             st.rerun()
+
