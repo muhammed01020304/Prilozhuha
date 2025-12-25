@@ -2,28 +2,32 @@ import streamlit as st
 import google.generativeai as genai
 import random
 
-# --- 1. СУПЕР-НАСТРОЙКА ИИ ---
+# --- НАСТРОЙКА СТРАНИЦЫ ---
+st.set_page_config(page_title="AIS Exam Master", page_icon="🎓")
+
+# --- ИНИЦИАЛИЗАЦИЯ ИИ ---
 if "GEMINI_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GEMINI_KEY"])
 else:
-    st.error("❌ Ключ GEMINI_KEY не найден в Secrets!")
+    st.error("❌ Ключ не найден в Secrets!")
     st.stop()
 
-# Функция для выбора лучшей доступной модели
-@st.cache_resource
-def load_ai_model():
-    # Пробуем по очереди: самую современную, потом самую стабильную
-    for model_name in ['gemini-1.5-flash', 'gemini-pro']:
+# Функция для вызова ИИ с защитой от ошибок
+def ask_ai(prompt):
+    # Список моделей от самой надежной к новой
+    models_to_try = ['gemini-1.5-flash', 'gemini-pro', 'models/gemini-1.5-flash']
+    
+    last_error = ""
+    for model_name in models_to_try:
         try:
-            m = genai.GenerativeModel(model_name)
-            # Тестовый запрос, чтобы проверить работоспособность
-            m.generate_content("test") 
-            return m
-        except Exception:
-            continue
-    return None
-
-model = load_ai_model()
+            model = genai.GenerativeModel(model_name)
+            response = model.generate_content(prompt)
+            return response.text
+        except Exception as e:
+            last_error = str(e)
+            continue # Пробуем следующую модель
+            
+    return f"🛑 Ошибка Google: {last_error}"
 
 # --- ПОЛНАЯ БАЗА ДАННЫХ ЭКЗАМЕНА (25 БИЛЕТОВ) ---
 tickets_data = {
@@ -229,19 +233,12 @@ tickets_data = {
     }
 }
 
-# --- 3. ИНТЕРФЕЙС ---
-st.set_page_config(page_title="AIS Exam Master", page_icon="🎓")
+# --- ИНТЕРФЕЙС ---
 st.title("🚀 AIS Exam Master")
-
-if model is None:
-    st.error("🛑 Ошибка: Google отклоняет запросы. Попробуй создать новый ключ в AI Studio на другую почту.")
-    st.stop()
 
 tab_study, tab_exam, tab_lab, tab_any = st.tabs(["📖 УЧИТЬ", "🎫 ЭКЗАМЕН", "🧪 AI ЛАБ", "🌍 ТЕМЫ"])
 
-# ВКЛАДКА: УЧИТЬ (Всегда работает)
 with tab_study:
-    st.header("Справочник билетов")
     for num, data in tickets_data.items():
         with st.expander(f"БИЛЕТ №{num}"):
             st.write(f"**В1:** {data['q1']}")
@@ -251,11 +248,9 @@ with tab_study:
             st.success(f"**Практика:** {data['pract']}")
             st.code(data['p_sol'])
 
-# ВКЛАДКА: ЭКЗАМЕН
 with tab_exam:
-    if 'ticket' not in st.session_state:
-        st.session_state.ticket = None
-        st.session_state.step = 1
+    if 'ticket' not in st.session_state: st.session_state.ticket = None
+    if 'step' not in st.session_state: st.session_state.step = 1
 
     if st.button("🎲 Вытянуть билет"):
         st.session_state.ticket = random.choice(list(tickets_data.keys()))
@@ -268,33 +263,30 @@ with tab_exam:
         
         q = t['q1'] if st.session_state.step == 1 else (t['q2'] if st.session_state.step == 2 else t['pract'])
         st.subheader(q)
-        ans = st.text_area("Ваш ответ:", key=f"ex_{st.session_state.step}")
+        ans = st.text_area("Твой ответ:", key=f"ans_{st.session_state.step}")
         
         if st.button("✅ Проверить"):
-            ref = t['a1'] if st.session_state.step == 1 else (t['a2'] if st.session_state.step == 2 else t['p_sol'])
             with st.spinner("ИИ анализирует..."):
-                try:
-                    res = model.generate_content(f"Вопрос: {q}\nЭталон: {ref}\nОтвет студента: {ans}\nПроверь кратко.").text
-                    st.success(res)
-                    if st.session_state.step < 3:
-                        if st.button("Следующий шаг 👉"):
-                            st.session_state.step += 1
-                            st.rerun()
-                except Exception as e:
-                    st.error(f"Лимит исчерпан или ошибка: {e}")
+                ref = t['a1'] if st.session_state.step == 1 else (t['a2'] if st.session_state.step == 2 else t['p_sol'])
+                res = ask_ai(f"Вопрос: {q}. Эталон: {ref}. Ответ: {ans}. Оцени кратко.")
+                st.write(res)
+                if "🛑 Ошибка" not in res and st.session_state.step < 3:
+                    if st.button("Следующий шаг"):
+                        st.session_state.step += 1
+                        st.rerun()
 
-# ВКЛАДКА: AI ЛАБ
 with tab_lab:
-    st.header("Генератор задач")
-    t_lab = st.selectbox("Тема:", ["ИБ", "Бэкапы", "ПО", "Мониторинг"])
+    st.header("Генератор")
     if st.button("⚡ Создать задачу"):
-        with st.spinner("..."):
-            try:
-                st.session_state.lab_q = model.generate_content(f"Задай задачу по {t_lab}").text
-            except: st.error("Ошибка лимита.")
-    
-    if 'lab_q' in st.session_state:
-        st.info(st.session_state.lab_q)
+        st.session_state.l_q = ask_ai("Задай практическую задачу по техподдержке АИС.")
+    if 'l_q' in st.session_state:
+        st.info(st.session_state.l_q)
+
+with tab_any:
+    topic = st.text_input("Тема викторины:")
+    if st.button("Начать"):
+        st.write(ask_ai(f"Задай 1 короткий вопрос по теме {topic}"))
+
 
 
 
