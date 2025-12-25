@@ -1,42 +1,38 @@
 import streamlit as st
-import google.generativeai as genai
+from groq import Groq
 import random
 
-# --- КОНФИГУРАЦИЯ СТРАНИЦЫ ---
-st.set_page_config(page_title="AIS Exam Master v2.5", page_icon="🎓", layout="centered")
+# --- НАСТРОЙКА ИНТЕРФЕЙСА ---
+st.set_page_config(page_title="AIS Exam Master PRO", page_icon="🎓", layout="centered")
 
-# --- НАСТРОЙКА ИИ ---
-if "GEMINI_KEY" in st.secrets:
-    API_KEY = st.secrets["GEMINI_KEY"]
+# --- ИНИЦИАЛИЗАЦИЯ ИИ (GROQ) ---
+if "GROQ_KEY" in st.secrets:
+    client = Groq(api_key=st.secrets["GROQ_KEY"])
 else:
-    st.error("Ошибка: Ключ GEMINI_KEY не найден в Secrets!")
+    st.error("Ключ GROQ_KEY не найден в Secrets!")
     st.stop()
 
-genai.configure(api_key=API_KEY)
-model = genai.GenerativeModel('gemini-2.0-flash-lite')
+def ask_ai(prompt):
+    try:
+        completion = client.chat.completions.create(
+            model="llama-3.3-70b-versatile", # Мощная и быстрая модель
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return completion.choices[0].message.content
+    except Exception as e:
+        return f"Ошибка связи с ИИ: {e}"
 
-# --- ФУНКЦИЯ ДЛЯ КРАСИВОГО ВЫВОДА (ЗЕЛЕНЫЙ ТЕКСТ) ---
+# --- ФУНКЦИЯ ДЛЯ ЗЕЛЕНОГО ТЕКСТА ---
 def st_ai_message(text):
-    """Выводит текст в стиле хакерской консоли"""
     st.markdown(
         f"""
-        <div style="
-            background-color: #1e1e1e; 
-            padding: 20px; 
-            border-radius: 12px; 
-            border: 1px solid #00ff66; 
-            margin-top: 20px;">
-            <p style="
-                color: #00ff66; 
-                font-family: 'Consolas', 'Courier New', monospace; 
-                font-size: 15px; 
-                line-height: 1.6; 
-                white-space: pre-wrap; 
-                margin: 0;">{text}</p>
+        <div style="background-color: #1e1e1e; padding: 20px; border-radius: 12px; border: 1px solid #00ff66; margin-top: 20px;">
+            <p style="color: #00ff66; font-family: 'Consolas', monospace; font-size: 15px; line-height: 1.6; white-space: pre-wrap; margin: 0;">{text}</p>
         </div>
         """, 
         unsafe_allow_html=True
     )
+
 
 # --- ПОЛНАЯ БАЗА ДАННЫХ ЭКЗАМЕНА (25 БИЛЕТОВ) ---
 tickets_data = {
@@ -242,34 +238,23 @@ tickets_data = {
     }
 }
 
-# --- ИНТЕРФЕЙС ---
-st.title("🚀 AIS Exam Master v2.5")
-st.caption("Твой мобильный тренажер в стиле исходника")
+# --- ИНТЕРФЕЙС САЙТА ---
+st.title("🚀 AIS Exam Master")
+st.caption("Версия на базе Groq (Без лимитов)")
 
-tab_study, tab_exam, tab_lab, tab_any = st.tabs([
-    "📖 УЧИТЬ", "🎫 ЭКЗАМЕН", "🧪 AI ЛАБ", "🌍 ТЕМЫ"
-])
+tab_study, tab_exam, tab_lab, tab_any = st.tabs(["📖 УЧИТЬ", "🎫 ЭКЗАМЕН", "🧪 AI ЛАБ", "🌍 ТЕМЫ"])
 
-# --- 1. ВКЛАДКА: УЧИТЬ ---
 with tab_study:
-    st.header("Справочник: Теория + Практика")
     for num in sorted(tickets_data.keys(), key=int):
-        data = tickets_data[num]
         with st.expander(f"📘 БИЛЕТ №{num}"):
-            st.markdown(f"**Вопрос 1:** {data['q1']}")
-            st.info(data['a1'])
-            st.markdown(f"**Вопрос 2:** {data['q2']}")
-            st.info(data['a2'])
-            st.markdown("**🛠 ПРАКТИКА:**")
-            st.success(data['pract'])
-            st.markdown("**📝 АЛГОРИТМ:**")
-            st.code(data['p_sol'])
+            d = tickets_data[num]
+            st.write(f"**В1:** {d['q1']}\n\n{d['a1']}")
+            st.write(f"**В2:** {d['q2']}\n\n{d['a2']}")
+            st.success(f"**Практика:** {d['pract']}\n\n{d['p_sol']}")
 
-# --- 2. ВКЛАДКА: ЭКЗАМЕН ---
 with tab_exam:
-    if 'ex_ticket' not in st.session_state:
-        st.session_state.ex_ticket = None
-        st.session_state.ex_step = 1
+    if 'ex_ticket' not in st.session_state: st.session_state.ex_ticket = None
+    if 'ex_step' not in st.session_state: st.session_state.ex_step = 1
 
     if st.button("🎲 Тянуть новый билет"):
         st.session_state.ex_ticket = random.choice(list(tickets_data.keys()))
@@ -282,105 +267,36 @@ with tab_exam:
         data = tickets_data[t_num]
         
         st.warning(f"Билет №{t_num} | Шаг {step} из 3")
-        
-        if step == 1: q, ref = data['q1'], data['a1']
-        elif step == 2: q, ref = data['q2'], data['a2']
-        else: q, ref = f"ПРАКТИЧЕСКОЕ ЗАДАНИЕ: {data['pract']}", data['p_sol']
+        q = data['q1'] if step == 1 else (data['q2'] if step == 2 else data['pract'])
+        ref = data['a1'] if step == 1 else (data['a2'] if step == 2 else data['p_sol'])
         
         st.subheader(q)
-        user_ans = st.text_area("Твой ответ:", key=f"ans_step_{step}_{t_num}", height=150)
+        user_ans = st.text_area("Твой ответ:", key=f"ans_{step}_{t_num}")
         
-        if st.button("✅ Проверить ответ"):
-            with st.spinner("🤖 ИИ анализирует..."):
-                prompt = f"""
-                Ты - строгий ИТ-экзаменатор. Проверь ответ студента.
-                Вопрос: {q}
-                Эталон: {ref}
-                Ответ студента: {user_ans}
-
-                Твой разбор должен быть структурированным:
-                1. Оценка (ВЕРНО/НЕВЕРНО/ЧАСТИЧНО).
-                2. Что студент написал правильно.
-                3. Что студент ЗАБЫЛ или ГДЕ ОШИБСЯ (самый важный пункт).
-                4. Как этот ответ должен звучать на 'отлично'.
-                """
-                res = model.generate_content(prompt).text
+        if st.button("✅ Проверить"):
+            with st.spinner("Анализирую через Groq..."):
+                prompt = f"Ты строгий экзаменатор. Вопрос: {q}. Ответ студента: {user_ans}. Эталон: {ref}. Оцени ответ, укажи ошибки и напиши идеальный вариант. Будь краток."
+                res = ask_ai(prompt)
                 st_ai_message(res)
-                
-                if step < 3:
-                    if st.button("Далее 👉"):
-                        st.session_state.ex_step += 1
-                        st.rerun()
-                else:
-                    st.balloons()
-                    st.success("Билет полностью пройден!")
+                if step < 3: st.button("Далее 👉", on_click=lambda: st.session_state.update({"ex_step": step+1}))
+    else: st.write("Нажми кнопку выше.")
 
-# --- 3. ВКЛАДКА: AI ЛАБОРАТОРИЯ ---
-# --- 3. ВКЛАДКА: AI ЛАБОРАТОРИЯ ---
 with tab_lab:
     st.header("Генератор задач")
-    topic = st.selectbox("Тема:", ["ИБ", "Бэкапы", "Установка ПО", "Мониторинг", "Администрирование"])
-    diff = st.select_slider("Сложность:", ["Легко", "Средне", "Сложно"])
-    
-    # Кнопка создания задачи
-    if st.button("⚡ Создать уникальную задачу"):
+    topic = st.selectbox("Тема:", ["ИБ", "Бэкапы", "ПО", "Мониторинг"])
+    if st.button("⚡ Создать задачу"):
         with st.spinner("Генерирую..."):
-            try:
-                prompt = f"Задай одну практическую задачу по техподдержке АИС. Тема: {topic}, сложность: {diff}."
-                response = model.generate_content(prompt)
-                # Сохраняем текст в session_state, чтобы он не пропадал при обновлении
-                st.session_state.lab_q = response.text 
-            except Exception as e:
-                st.error(f"Ошибка лимита запросов. Подожди минуту! ({e})")
-    
-    # Показываем задачу, если она есть в памяти
-    if 'lab_q' in st.session_state and st.session_state.lab_q:
-        st.info(st.session_state.lab_q)
-        
-        ans_lab = st.text_area("Твое решение задачи:", key="lab_ans_area")
-        
-        if st.button("🎯 Оценить решение"):
-            with st.spinner("Проверка..."):
-                try:
-                    prompt_eval = f"Задача: {st.session_state.lab_q}\nРешение студента: {ans_lab}. Проверь профессионально, оцени по 5-бальной шкале."
-                    res = model.generate_content(prompt_eval)
-                    st_ai_message(res.text)
-                except Exception as e:
-                    st.error("Google устал. Подожди 30-60 секунд.")
-# --- 4. ВКЛАДКА: ЛЮБАЯ ТЕМА ---
-with tab_any:
-    st.header("Викторина 10 вопросов")
-    if 'any_count' not in st.session_state: st.session_state.any_count = 0
-    
-    any_topic = st.text_input("Впиши тему (например: Minecraft, Кулинария):")
-    
-    if st.button("🚀 Начать викторину"):
-        st.session_state.any_count = 1
-        st.session_state.any_topic = any_topic
-        st.rerun()
+            st.session_state.l_q = ask_ai(f"Задай практическую задачу по теме {topic} для АИС.")
+    if 'l_q' in st.session_state:
+        st.info(st.session_state.l_q)
+        ans = st.text_area("Решение:")
+        if st.button("🎯 Оценить"):
+            st_ai_message(ask_ai(f"Задача: {st.session_state.l_q}\nОтвет: {ans}. Оцени."))
 
-    if st.session_state.any_count > 0 and st.session_state.any_count <= 10:
-        curr_topic = st.session_state.any_topic
-        curr_num = st.session_state.any_count
-        st.write(f"**Вопрос {curr_num} / 10**")
-        
-        with st.spinner("ИИ пишет вопрос..."):
-            q_text = model.generate_content(f"Тема {curr_topic}. Вопрос №{curr_num}. Коротко.").text
-            st.subheader(q_text)
-        
-        ans_any = st.text_input("Твой ответ:", key=f"any_in_{curr_num}")
-        if st.button("🎯 Проверить"):
-            with st.spinner("Проверка..."):
-                res = model.generate_content(f"Вопрос: {q_text}\nОтвет: {ans_any}. Проверь кратко.").text
-                st_ai_message(res)
-                if st.button("Дальше ⏭"):
-                    st.session_state.any_count += 1
-                    st.rerun()
-    elif st.session_state.any_count > 10:
-        st.success("Викторина завершена!")
-        if st.button("Заново 🔄"):
-            st.session_state.any_count = 0
-            st.rerun()
+with tab_any:
+    t_any = st.text_input("Тема викторины:")
+    if st.button("Задать вопрос"):
+        st_ai_message(ask_ai(f"Задай 1 короткий вопрос по теме {t_any}."))
 
 
 
