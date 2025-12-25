@@ -15,7 +15,7 @@ else:
     st.error("Ошибка: API-ключ не найден в настройках сервера!")
     st.stop()
 genai.configure(api_key=API_KEY)
-model = genai.GenerativeModel('gemini-flash-latest')
+model = genai.GenerativeModel('gemini-2.0-flash')
 
 # --- ПОЛНАЯ БАЗА ДАННЫХ ЭКЗАМЕНА (25 БИЛЕТОВ) ---
 tickets_data = {
@@ -340,4 +340,5 @@ with tab_any:
             st.session_state.any_count = 0
 
             st.rerun()
+
 
