@@ -1,6 +1,10 @@
 import streamlit as st
 import google.generativeai as genai
 import random
+
+if "GEMINI_KEY" not in st.secrets:
+    st.error("Ключ не найден в Secrets!")
+    
 # --- НАСТРОЙКА СТРАНИЦЫ ---
 st.set_page_config(page_title="AIS Exam Master", page_icon="🎓", layout="centered")
 
@@ -330,4 +334,5 @@ with tab_any:
         st.success("Викторина пройдена!")
         if st.button("Заново"):
             st.session_state.any_count = 0
+
             st.rerun()
