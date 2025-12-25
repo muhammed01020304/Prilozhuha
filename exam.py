@@ -13,7 +13,7 @@ else:
     st.stop()
 
 genai.configure(api_key=API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash')
+model = genai.GenerativeModel('gemini-2.0-flash')
 
 # --- ФУНКЦИЯ ДЛЯ КРАСИВОГО ВЫВОДА (ЗЕЛЕНЫЙ ТЕКСТ) ---
 def st_ai_message(text):
@@ -381,5 +381,6 @@ with tab_any:
         if st.button("Заново 🔄"):
             st.session_state.any_count = 0
             st.rerun()
+
 
 
