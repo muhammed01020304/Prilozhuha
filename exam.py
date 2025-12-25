@@ -2,25 +2,28 @@ import streamlit as st
 import google.generativeai as genai
 import random
 
-if "GEMINI_KEY" not in st.secrets:
-    st.error("Ключ не найден в Secrets!")
-    
-# --- НАСТРОЙКА СТРАНИЦЫ ---
-st.set_page_config(page_title="AIS Exam Master", page_icon="🎓", layout="centered")
-
-# --- НАСТРОЙКА ИИ ---
+# --- 1. СУПЕР-НАСТРОЙКА ИИ ---
 if "GEMINI_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GEMINI_KEY"])
 else:
-    st.error("Ключ не найден!")
+    st.error("❌ Ключ GEMINI_KEY не найден в Secrets!")
     st.stop()
 
-# Кэшируем модель, чтобы не создавать её 100 раз
+# Функция для выбора лучшей доступной модели
 @st.cache_resource
-def get_ai_model():
-    return genai.GenerativeModel('gemini-2.0-flash')
+def load_ai_model():
+    # Пробуем по очереди: самую современную, потом самую стабильную
+    for model_name in ['gemini-1.5-flash', 'gemini-pro']:
+        try:
+            m = genai.GenerativeModel(model_name)
+            # Тестовый запрос, чтобы проверить работоспособность
+            m.generate_content("test") 
+            return m
+        except Exception:
+            continue
+    return None
 
-model = get_ai_model()
+model = load_ai_model()
 
 # --- ПОЛНАЯ БАЗА ДАННЫХ ЭКЗАМЕНА (25 БИЛЕТОВ) ---
 tickets_data = {
@@ -226,125 +229,73 @@ tickets_data = {
     }
 }
 
-
-# --- ИНТЕРФЕЙС ---
+# --- 3. ИНТЕРФЕЙС ---
+st.set_page_config(page_title="AIS Exam Master", page_icon="🎓")
 st.title("🚀 AIS Exam Master")
-st.caption("Твой мобильный тренажер по техподдержке АИС")
 
-# Вкладки (Tabs) - идеально для мобильного переключения
-tab_study, tab_exam, tab_lab, tab_any = st.tabs([
-    "📖 УЧИТЬ", "🎫 ЭКЗАМЕН", "🧪 AI ЛАБ", "🌍 ТЕМЫ"
-])
+if model is None:
+    st.error("🛑 Ошибка: Google отклоняет запросы. Попробуй создать новый ключ в AI Studio на другую почту.")
+    st.stop()
 
-# --- 1. ВКЛАДКА: УЧИТЬ ТЕОРИЮ ---
+tab_study, tab_exam, tab_lab, tab_any = st.tabs(["📖 УЧИТЬ", "🎫 ЭКЗАМЕН", "🧪 AI ЛАБ", "🌍 ТЕМЫ"])
+
+# ВКЛАДКА: УЧИТЬ (Всегда работает)
 with tab_study:
     st.header("Справочник билетов")
-    search = st.text_input("🔍 Поиск билета (номер):", placeholder="Например: 1")
-    
     for num, data in tickets_data.items():
-        if search and num != search:
-            continue
         with st.expander(f"БИЛЕТ №{num}"):
-            st.markdown(f"**Вопрос 1:** {data['q1']}")
+            st.write(f"**В1:** {data['q1']}")
             st.info(data['a1'])
-            st.markdown(f"**Вопрос 2:** {data['q2']}")
+            st.write(f"**В2:** {data['q2']}")
             st.info(data['a2'])
-            st.markdown("**🛠 ПРАКТИКА:**")
-            st.success(data['pract'])
-            st.markdown("**📝 АЛГОРИТМ:**")
+            st.success(f"**Практика:** {data['pract']}")
             st.code(data['p_sol'])
 
-# --- 2. ВКЛАДКА: ЭКЗАМЕН ---
+# ВКЛАДКА: ЭКЗАМЕН
 with tab_exam:
-    if 'ex_ticket' not in st.session_state:
-        st.session_state.ex_ticket = None
-        st.session_state.ex_step = 1
+    if 'ticket' not in st.session_state:
+        st.session_state.ticket = None
+        st.session_state.step = 1
 
-    if st.button("🎲 Тянуть билет"):
-        st.session_state.ex_ticket = random.choice(list(tickets_data.keys()))
-        st.session_state.ex_step = 1
+    if st.button("🎲 Вытянуть билет"):
+        st.session_state.ticket = random.choice(list(tickets_data.keys()))
+        st.session_state.step = 1
+        st.rerun()
 
-    if st.session_state.ex_ticket:
-        t_num = st.session_state.ex_ticket
-        step = st.session_state.ex_step
-        data = tickets_data[t_num]
+    if st.session_state.ticket:
+        t = tickets_data[st.session_state.ticket]
+        st.warning(f"Билет №{st.session_state.ticket} | Вопрос {st.session_state.step}/3")
         
-        st.warning(f"Билет №{t_num} | Вопрос {step} из 3")
-        
-        if step == 1: current_q = data['q1']
-        elif step == 2: current_q = data['q2']
-        else: current_q = f"ПРАКТИКА: {data['pract']}"
-        
-        st.subheader(current_q)
-        user_ans = st.text_area("Твой ответ:", key=f"ans_{step}_{t_num}")
+        q = t['q1'] if st.session_state.step == 1 else (t['q2'] if st.session_state.step == 2 else t['pract'])
+        st.subheader(q)
+        ans = st.text_area("Ваш ответ:", key=f"ex_{st.session_state.step}")
         
         if st.button("✅ Проверить"):
+            ref = t['a1'] if st.session_state.step == 1 else (t['a2'] if st.session_state.step == 2 else t['p_sol'])
             with st.spinner("ИИ анализирует..."):
-                ref = data['a1'] if step == 1 else (data['a2'] if step == 2 else data['p_sol'])
-                prompt = f"Вопрос: {current_q}\nЭталон: {ref}\nОтвет студента: {user_ans}\nПроверь кратко смысл."
-                res = model.generate_content(prompt).text
-                st.markdown("### 🤖 Разбор ИИ:")
-                st.write(res)
-                if step < 3:
-                    if st.button("Далее 👉"):
-                        st.session_state.ex_step += 1
-                        st.rerun()
-                else:
-                    st.balloons()
-                    st.success("Билет завершен!")
-    else:
-        st.write("Нажми кнопку, чтобы начать симуляцию экзамена.")
+                try:
+                    res = model.generate_content(f"Вопрос: {q}\nЭталон: {ref}\nОтвет студента: {ans}\nПроверь кратко.").text
+                    st.success(res)
+                    if st.session_state.step < 3:
+                        if st.button("Следующий шаг 👉"):
+                            st.session_state.step += 1
+                            st.rerun()
+                except Exception as e:
+                    st.error(f"Лимит исчерпан или ошибка: {e}")
 
-# --- 3. ВКЛАДКА: AI ЛАБОРАТОРИЯ ---
+# ВКЛАДКА: AI ЛАБ
 with tab_lab:
     st.header("Генератор задач")
-    topic = st.selectbox("Тема:", ["ИБ", "Бэкапы", "Установка ПО", "Мониторинг", "Юзеры"])
-    diff = st.select_slider("Сложность:", ["Легко", "Средне", "Сложно"])
-    
+    t_lab = st.selectbox("Тема:", ["ИБ", "Бэкапы", "ПО", "Мониторинг"])
     if st.button("⚡ Создать задачу"):
-        with st.spinner("Генерирую..."):
-            prompt = f"Задай 1 практическую задачу по техподдержке АИС. Тема: {topic}, сложность {diff}."
-            st.session_state.lab_q = model.generate_content(prompt).text
+        with st.spinner("..."):
+            try:
+                st.session_state.lab_q = model.generate_content(f"Задай задачу по {t_lab}").text
+            except: st.error("Ошибка лимита.")
     
     if 'lab_q' in st.session_state:
         st.info(st.session_state.lab_q)
-        ans_lab = st.text_area("Твое решение:")
-        if st.button("🎯 Оценить"):
-            res = model.generate_content(f"Задача: {st.session_state.lab_q}\nРешение: {ans_lab}. Проверь.").text
-            st.write(res)
 
-# --- 4. ВКЛАДКА: ЛЮБАЯ ТЕМА ---
-with tab_any:
-    st.header("Викторина 10 вопросов")
-    any_topic = st.text_input("Впиши тему (игры, готовка, история...):")
-    
-    if 'any_count' not in st.session_state:
-        st.session_state.any_count = 0
-
-    if st.button("🚀 Начать викторину"):
-        st.session_state.any_count = 1
-        st.session_state.any_topic = any_topic
-
-    if st.session_state.any_count > 0 and st.session_state.any_count <= 10:
-        st.write(f"**Вопрос {st.session_state.any_count} / 10**")
-        with st.spinner("ИИ пишет вопрос..."):
-            q_prompt = f"Тема {st.session_state.any_topic}. Вопрос №{st.session_state.any_count}. Кратко."
-            q_any = model.generate_content(q_prompt).text
-            st.subheader(q_any)
-            
-        ans_any = st.text_input("Твой ответ:", key=f"any_{st.session_state.any_count}")
-        if st.button("Проверить 🎯"):
-            res = model.generate_content(f"Вопрос: {q_any}\nОтвет: {ans_any}. Кратко.").text
-            st.write(res)
-            if st.button("Следующий вопрос ⏭"):
-                st.session_state.any_count += 1
-                st.rerun()
-    elif st.session_state.any_count > 10:
-        st.success("Викторина пройдена!")
-        if st.button("Заново"):
-            st.session_state.any_count = 0
-
-            st.rerun()
 
 
 
