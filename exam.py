@@ -12,23 +12,24 @@ else:
     st.error("❌ Ключ не найден в Secrets!")
     st.stop()
 
-# Функция для вызова ИИ с защитой от ошибок
+# Функция для вызова ИИ с автоматическим подбором рабочей модели
 def ask_ai(prompt):
-    # Список моделей от самой надежной к новой
-    models_to_try = ['gemini-1.5-flash', 'gemini-pro', 'models/gemini-1.5-flash']
+    # Пробуем модели из твоего списка доступных
+    models_to_try = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-pro']
     
     last_error = ""
     for model_name in models_to_try:
         try:
+            # Создаем модель
             model = genai.GenerativeModel(model_name)
+            # Пытаемся получить ответ
             response = model.generate_content(prompt)
             return response.text
         except Exception as e:
             last_error = str(e)
-            continue # Пробуем следующую модель
+            continue # Если ошибка, пробуем следующую модель
             
-    return f"🛑 Ошибка Google: {last_error}"
-
+    return f"🛑 Ошибка Google: {last_error}\n\nПопробуйте перезагрузить страницу или проверить ключ."
 # --- ПОЛНАЯ БАЗА ДАННЫХ ЭКЗАМЕНА (25 БИЛЕТОВ) ---
 tickets_data = {
     "1": {
@@ -239,12 +240,13 @@ st.title("🚀 AIS Exam Master")
 tab_study, tab_exam, tab_lab, tab_any = st.tabs(["📖 УЧИТЬ", "🎫 ЭКЗАМЕН", "🧪 AI ЛАБ", "🌍 ТЕМЫ"])
 
 with tab_study:
+    st.info("Здесь ты можешь учить теорию и смотреть правильные шаги практики.")
     for num, data in tickets_data.items():
         with st.expander(f"БИЛЕТ №{num}"):
             st.write(f"**В1:** {data['q1']}")
-            st.info(data['a1'])
+            st.markdown(f"*{data['a1']}*")
             st.write(f"**В2:** {data['q2']}")
-            st.info(data['a2'])
+            st.markdown(f"*{data['a2']}*")
             st.success(f"**Практика:** {data['pract']}")
             st.code(data['p_sol'])
 
@@ -252,7 +254,7 @@ with tab_exam:
     if 'ticket' not in st.session_state: st.session_state.ticket = None
     if 'step' not in st.session_state: st.session_state.step = 1
 
-    if st.button("🎲 Вытянуть билет"):
+    if st.button("🎲 Вытянуть новый билет"):
         st.session_state.ticket = random.choice(list(tickets_data.keys()))
         st.session_state.step = 1
         st.rerun()
@@ -263,29 +265,41 @@ with tab_exam:
         
         q = t['q1'] if st.session_state.step == 1 else (t['q2'] if st.session_state.step == 2 else t['pract'])
         st.subheader(q)
-        ans = st.text_area("Твой ответ:", key=f"ans_{st.session_state.step}")
+        ans = st.text_area("Твой ответ:", key=f"ans_{st.session_state.step}_{st.session_state.ticket}")
         
         if st.button("✅ Проверить"):
             with st.spinner("ИИ анализирует..."):
                 ref = t['a1'] if st.session_state.step == 1 else (t['a2'] if st.session_state.step == 2 else t['p_sol'])
-                res = ask_ai(f"Вопрос: {q}. Эталон: {ref}. Ответ: {ans}. Оцени кратко.")
+                res = ask_ai(f"Вопрос: {q}. Эталон: {ref}. Ответ студента: {ans}. Оцени кратко.")
                 st.write(res)
-                if "🛑 Ошибка" not in res and st.session_state.step < 3:
-                    if st.button("Следующий шаг"):
-                        st.session_state.step += 1
-                        st.rerun()
+                if "🛑 Ошибка" not in res:
+                    if st.session_state.step < 3:
+                        if st.button("Далее 👉"):
+                            st.session_state.step += 1
+                            st.rerun()
+                    else:
+                        st.balloons()
+                        st.success("Билет завершен!")
 
 with tab_lab:
-    st.header("Генератор")
+    st.header("Генератор задач")
+    topic = st.selectbox("Выбери тему:", ["ИБ", "Бэкапы", "Установка ПО", "Мониторинг"])
     if st.button("⚡ Создать задачу"):
-        st.session_state.l_q = ask_ai("Задай практическую задачу по техподдержке АИС.")
+        with st.spinner("Генерирую..."):
+            st.session_state.l_q = ask_ai(f"Задай одну сложную практическую задачу по теме {topic} для специалиста АИС.")
+    
     if 'l_q' in st.session_state:
         st.info(st.session_state.l_q)
+        l_ans = st.text_area("Твое решение:")
+        if st.button("🎯 Оценить"):
+            st.write(ask_ai(f"Задача: {st.session_state.l_q}\nРешение студента: {l_ans}. Проверь и поставь оценку."))
 
 with tab_any:
-    topic = st.text_input("Тема викторины:")
-    if st.button("Начать"):
-        st.write(ask_ai(f"Задай 1 короткий вопрос по теме {topic}"))
+    topic_any = st.text_input("Тема викторины (например: Minecraft или Плов):")
+    if st.button("Задать вопрос"):
+        with st.spinner("Пишу..."):
+            st.write(ask_ai(f"Задай 1 короткий вопрос по теме {topic_any}."))
+
 
 
 
