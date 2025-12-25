@@ -10,19 +10,17 @@ st.set_page_config(page_title="AIS Exam Master", page_icon="🎓", layout="cente
 
 # --- НАСТРОЙКА ИИ ---
 if "GEMINI_KEY" in st.secrets:
-    API_KEY = st.secrets["GEMINI_KEY"]
+    genai.configure(api_key=st.secrets["GEMINI_KEY"])
 else:
-    st.error("Ошибка: API-ключ не найден!")
+    st.error("Ключ не найден!")
     st.stop()
 
-genai.configure(api_key=API_KEY)
-
-# Кэшируем модель, чтобы она не пересоздавалась постоянно
+# Кэшируем модель, чтобы не создавать её 100 раз
 @st.cache_resource
-def load_model():
-    return genai.GenerativeModel('gemini-2.0-flash')
+def get_ai_model():
+    return genai.GenerativeModel('gemini-1.5-flash')
 
-model = load_model()
+model = get_ai_model()
 
 # --- ПОЛНАЯ БАЗА ДАННЫХ ЭКЗАМЕНА (25 БИЛЕТОВ) ---
 tickets_data = {
@@ -347,6 +345,7 @@ with tab_any:
             st.session_state.any_count = 0
 
             st.rerun()
+
 
 
 
