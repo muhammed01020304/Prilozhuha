@@ -1,19 +1,44 @@
 import streamlit as st
 from groq import Groq
 import random
+import time
 
-# --- КОНФИГУРАЦИЯ ---
-st.set_page_config(page_title="AIS Master PRO | GROQ", page_icon="💻", layout="centered")
+# --- 1. КИБЕР-ДИЗАЙН (CSS) ---
+st.set_page_config(page_title="AIS MASTER ELITE", page_icon="🖥", layout="wide")
 
-# --- ИНИЦИАЛИЗАЦИЯ GROQ ---
+st.markdown("""
+<style>
+    .reportview-container { background: #0e1117; }
+    .stTextArea textarea { background-color: #161b22; color: #e6edf3; border: 1px solid #30363d; }
+    .stButton>button { width: 100%; border-radius: 5px; height: 3em; background-color: #238636; color: white; border: none; }
+    .stButton>button:hover { background-color: #2ea043; border: 1px solid #00ff66; }
+    
+    /* Хакерский терминал */
+    .terminal-box {
+        background-color: #050505;
+        border-left: 5px solid #00ff66;
+        padding: 20px;
+        border-radius: 5px;
+        box-shadow: 0 0 20px rgba(0, 255, 102, 0.1);
+        margin: 15px 0;
+    }
+    .terminal-text {
+        color: #00ff66;
+        font-family: 'Consolas', 'Monaco', monospace !important;
+        font-size: 14px !important;
+        text-shadow: 0 0 5px rgba(0, 255, 102, 0.5);
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# --- 2. ИНИЦИАЛИЗАЦИЯ GROQ ---
 if "GROQ_KEY" in st.secrets:
     client = Groq(api_key=st.secrets["GROQ_KEY"])
 else:
-    st.error("Ключ GROQ_KEY не найден в Secrets!")
+    st.error("FATAL ERROR: GROQ_KEY NOT FOUND IN SECRETS")
     st.stop()
 
-# Функция запроса к ИИ
-def ask_groq(system_prompt, user_input):
+def call_ai(system_prompt, user_input):
     try:
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
@@ -21,34 +46,15 @@ def ask_groq(system_prompt, user_input):
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_input}
             ],
-            temperature=0.5,
+            temperature=0.4, # Сделаем ответы более точными
         )
         return completion.choices[0].message.content
     except Exception as e:
-        return f"ОШИБКА ДОСТУПА: {e}"
+        return f"CRITICAL SYSTEM ERROR: {e}"
 
-# --- ТЕРМИНАЛЬНЫЙ СТИЛЬ (ЗЕЛЕНЫЙ ТЕКСТ) ---
-def terminal_print(text):
-    st.markdown(
-        f"""
-        <div style="
-            background-color: #050505; 
-            padding: 20px; 
-            border-radius: 8px; 
-            border: 2px solid #00ff66; 
-            box-shadow: 0 0 15px #00ff6633;
-            margin: 20px 0;">
-            <p style="
-                color: #00ff66; 
-                font-family: 'Consolas', monospace; 
-                font-size: 15px; 
-                line-height: 1.6; 
-                white-space: pre-wrap; 
-                margin: 0;">[ROOT@AIS_EXAM ~]# {text}</p>
-        </div>
-        """, 
-        unsafe_allow_html=True
-    )
+def print_terminal(text):
+    st.markdown(f'<div class="terminal-box"><p class="terminal-text">{text}</p></div>', unsafe_allow_html=True)
+
 
 # --- БАЗА ДАННЫХ (25 БИЛЕТОВ) ---
 tickets_data = {
@@ -79,29 +85,38 @@ tickets_data = {
     "25": {"q1": "Ошибки пользователей", "a1": "Некорректный ввод, удаление файлов.", "q2": "Методика анализа", "a2": "Сбор статистики обращений для выявления проблем.", "pract": "Разбор обращений.", "p_sol": "Поиск общей причины жалоб."}
 }
 
-# --- ИНТЕРФЕЙС ---
-st.title("🚀 AIS Exam Master v2.6")
-st.caption("Powered by GROQ | Llama 3.3 70B High-Speed")
+# --- 4. УПРАВЛЕНИЕ СОСТОЯНИЕМ (SESSION STATE) ---
+if 'page' not in st.session_state: st.session_state.page = "main"
+if 'ex_ticket' not in st.session_state: st.session_state.ex_ticket = None
+if 'ex_step' not in st.session_state: st.session_state.ex_step = 1
+if 'quiz_active' not in st.session_state: st.session_state.quiz_active = False
+if 'quiz_count' not in st.session_state: st.session_state.quiz_count = 1
+if 'quiz_topic' not in st.session_state: st.session_state.quiz_topic = ""
 
-tabs = st.tabs(["📖 УЧИТЬ", "🎫 ЭКЗАМЕН", "🧪 AI ЛАБ", "🌍 ТЕМЫ"])
+# --- 5. ОСНОВНОЙ ИНТЕРФЕЙС ---
+st.title("🖥 AIS EXAM MASTER ELITE v3.0")
+tabs = st.tabs(["📖 БАЗА ЗНАНИЙ", "🎫 ЭКЗАМЕН-СИМУЛЯТОР", "🧪 AI ЛАБОРАТОРИЯ", "🌍 УНИВЕРСАЛЬНЫЙ ТЕСТ"])
 
 # --- ВКЛАДКА 1: УЧИТЬ ---
 with tabs[0]:
-    st.header("База знаний")
-    for num in sorted(tickets_data.keys(), key=int):
-        with st.expander(f"📘 БИЛЕТ №{num}"):
+    st.header("📚 Справочник специалиста")
+    cols = st.columns(2)
+    for i, num in enumerate(sorted(tickets_data.keys(), key=int)):
+        with cols[i % 2].expander(f"📦 БИЛЕТ №{num}"):
             d = tickets_data[num]
-            st.markdown(f"**Вопрос 1:** {d['q1']}\n\n*Ответ:* {d['a1']}")
-            st.markdown(f"**Вопрос 2:** {d['q2']}\n\n*Ответ:* {d['a2']}")
+            st.markdown(f"**Вопрос 1:** {d['q1']}")
+            st.info(d['a1'])
+            st.markdown(f"**Вопрос 2:** {d['q2']}")
+            st.info(d['a2'])
+            st.markdown("---")
             st.success(f"🛠 **ПРАКТИКА:** {d['pract']}")
-            st.info(f"📝 **АЛГОРИТМ:** {d['p_sol']}")
+            st.warning(f"📝 **АЛГОРИТМ:** {d['p_sol']}")
 
 # --- ВКЛАДКА 2: ЭКЗАМЕН ---
 with tabs[1]:
-    if 'ex_ticket' not in st.session_state: st.session_state.ex_ticket = None
-    if 'ex_step' not in st.session_state: st.session_state.ex_step = 1
-
-    if st.button("🎲 Вытянуть случайный билет"):
+    st.header("🎫 Имитация государственного экзамена")
+    
+    if st.button("🎲 ВЫТЯНУТЬ СЛУЧАЙНЫЙ БИЛЕТ", use_container_width=True):
         st.session_state.ex_ticket = random.choice(list(tickets_data.keys()))
         st.session_state.ex_step = 1
         st.rerun()
@@ -111,77 +126,104 @@ with tabs[1]:
         step = st.session_state.ex_step
         data = tickets_data[t_num]
         
-        st.warning(f"Билет №{t_num} | Шаг {step} из 3")
-        q = data['q1'] if step == 1 else (data['q2'] if step == 2 else f"ПРАКТИКА: {data['pract']}")
+        # Прогресс билета
+        st.progress(step / 3)
+        st.subheader(f"Билет №{t_num} | Шаг {step} из 3")
+        
+        q = data['q1'] if step == 1 else (data['q2'] if step == 2 else f"ПРАКТИЧЕСКАЯ ЗАДАЧА: {data['pract']}")
         ref = data['a1'] if step == 1 else (data['a2'] if step == 2 else data['p_sol'])
         
-        st.subheader(q)
-        ans = st.text_area("Твой технический ответ:", key=f"ex_ans_{step}_{t_num}", height=150)
+        st.info(q)
+        user_ans = st.text_area("Введите технически обоснованный ответ:", key=f"ex_area_{step}_{t_num}", height=200)
         
-        if st.button("🚀 Сдать на проверку"):
-            with st.spinner("Экзаменатор читает лог..."):
-                sys_p = "Ты — крайне строгий ИТ-экзаменатор. Не хвали за посредственность. Если ответ неточный — ругай за непрофессионализм."
-                user_p = f"Вопрос: {q}\nЭталон: {ref}\nОтвет студента: {ans}\nОцени строго по структуре: ВЕРДИКТ, ЧТО ЗАБЫЛ, ИДЕАЛЬНЫЙ ТЕХНИЧЕСКИЙ ОТВЕТ."
-                res = ask_groq(sys_p, user_p)
-                terminal_print(res)
-                if step < 3:
-                    st.button("Далее 👉", on_click=lambda: st.session_state.update({"ex_step": step+1}))
-    else: st.info("Нажми кнопку выше.")
+        col_c, col_n = st.columns([1, 1])
+        if col_c.button("📊 СДАТЬ НА АНАЛИЗ"):
+            if user_ans:
+                with st.spinner("СИСТЕМА ПРОВЕРЯЕТ ВАШУ КВАЛИФИКАЦИЮ..."):
+                    sys_p = "Ты — Senior IT Architect. Твоя задача — провести жесткий аудит знаний студента. Ты не прощаешь ошибок. Если ответ слабый — ставь 2. Если хороший — укажи на профессиональные нюансы."
+                    user_p = f"Вопрос: {q}\nЭталон: {ref}\nОтвет студента: {user_ans}\nФормат ответа: 1.Вердикт (Оценка), 2.Критика, 3.Как ответил бы профессионал."
+                    res = call_ai(sys_p, user_p)
+                    print_terminal(res)
+        
+        if step < 3:
+            if col_n.button("СЛЕДУЮЩИЙ ВОПРОС 👉"):
+                st.session_state.ex_step += 1
+                st.rerun()
+        else:
+            if col_n.button("🏁 ЗАВЕРШИТЬ ЭКЗАМЕН"):
+                st.balloons()
+                st.session_state.ex_ticket = None
+                st.rerun()
 
 # --- ВКЛАДКА 3: AI ЛАБОРАТОРИЯ ---
 with tabs[2]:
-    st.header("Симулятор аварий")
-    topic_l = st.selectbox("Сфера:", ["Безопасность", "Сети", "БД", "Linux/Windows"])
-    if st.button("⚡ Сгенерировать критический сбой"):
-        with st.spinner("Симуляция инцидента..."):
-            p = f"Опиши серьезную проблему в АИС по теме {topic_l}. Студент должен предложить пошаговое решение."
-            st.session_state.lab_q = ask_groq("Ты — диспетчер техподдержки.", p)
+    st.header("🧪 Генератор инцидентов (AI LAB)")
+    topic_l = st.selectbox("Выберите зону ответственности:", ["Кибербезопасность", "Сетевая инфраструктура", "Базы данных", "Отказоустойчивость"])
+    diff_l = st.select_slider("Уровень сложности аварии:", ["Junior (Ошибка юзера)", "Middle (Сбой ПО)", "Senior (Катастрофа)"])
+    
+    if st.button("🔥 СГЕНЕРИРОВАТЬ ИНЦИДЕНТ"):
+        with st.spinner("СИМУЛЯЦИЯ СБОЯ..."):
+            p = f"Опиши серьезный ИТ-инцидент в крупной компании по теме {topic_l}. Уровень сложности: {diff_l}. Не пиши решение, только описание ситуации."
+            st.session_state.lab_q = call_ai("Ты — диспетчер мониторинга АИС.", p)
     
     if 'lab_q' in st.session_state:
         st.error(st.session_state.lab_q)
-        ans_l = st.text_area("Твой план действий:", key="lab_ans")
-        if st.button("🎯 Оценить профпригодность"):
-            eval_p = f"Инцидент: {st.session_state.lab_q}\nРешение: {ans_l}. Оцени жестко."
-            terminal_print(ask_groq("Ты — старший админ.", eval_p))
+        ans_lab = st.text_area("Ваш протокол устранения аварии:", height=200)
+        if st.button("🔌 ПРОВЕРИТЬ ПРОТОКОЛ"):
+            eval_p = f"Инцидент: {st.session_state.lab_q}\nРешение: {ans_lab}. Проверь по шагам. Если есть риск потери данных — ставь 0."
+            print_terminal(call_ai("Ты — руководитель ИТ-департамента.", eval_p))
 
-# --- ВКЛАДКА 4: ЛЮБАЯ ТЕМА ---
+# --- ВКЛАДКА 4: ЛЮБАЯ ТЕМА (МАРАФОН) ---
 with tabs[3]:
-    st.header("Универсальный марафон (10 вопросов)")
+    st.header("🌍 Универсальный тест (10 уровней)")
     
-    if 'any_active' not in st.session_state:
-        st.session_state.any_active = False
-        st.session_state.any_count = 1
-        st.session_state.any_topic = ""
-
-    if not st.session_state.any_active:
-        st.session_state.any_topic = st.text_input("Введи тему для викторины (напр. Minecraft, Ремонт, История):")
-        if st.button("🔥 Начать марафон"):
-            if st.session_state.any_topic:
-                st.session_state.any_active = True
-                st.session_state.any_count = 1
+    if not st.session_state.quiz_active:
+        topic_input = st.text_input("Введи область знаний (хоть 'Квантовая физика', хоть 'Dota 2'):")
+        if st.button("🚀 ЗАПУСТИТЬ МАРАФОН"):
+            if topic_input:
+                st.session_state.quiz_topic = topic_input
+                st.session_state.quiz_count = 1
+                st.session_state.quiz_active = True
+                # Чистим старые вопросы
+                for k in list(st.session_state.keys()):
+                    if k.startswith("q_any_"): del st.session_state[k]
                 st.rerun()
     else:
-        st.info(f"Тема: {st.session_state.any_topic} | Вопрос {st.session_state.any_count} / 10")
+        # Интерфейс активного квиза
+        q_num = st.session_state.quiz_count
+        st.write(f"### Тема: {st.session_state.quiz_topic}")
+        st.progress(q_num / 10)
+        st.write(f"**Вопрос {q_num} из 10**")
         
-        # Генерируем вопрос
-        q_key = f"q_any_{st.session_state.any_count}_{st.session_state.any_topic}"
+        q_key = f"q_any_{q_num}"
         if q_key not in st.session_state:
-            with st.spinner("Генерация вопроса..."):
-                st.session_state[q_key] = ask_groq("Ты ведущий викторины.", f"Задай ОДИН короткий сложный вопрос по теме {st.session_state.any_topic}. Номер {st.session_state.any_count}.")
+            with st.spinner("ИИ ПРИДУМЫВАЕТ ВОПРОС..."):
+                st.session_state[q_key] = call_ai("Ты ведущий интеллектуального шоу.", f"Задай сложный вопрос по теме {st.session_state.quiz_topic}. Номер вопроса {q_num}.")
         
-        st.subheader(st.session_state[q_key])
-        user_any_ans = st.text_area("Твой ответ:", key=f"in_any_{st.session_state.any_count}")
+        st.warning(st.session_state[q_key])
+        user_quiz_ans = st.text_area("Твой ответ на вопрос:", key=f"ans_any_{q_num}", height=100)
         
-        if st.button("🎯 Проверить ответ"):
-            with st.spinner("Проверка..."):
-                eval_res = ask_groq("Ты судья викторины.", f"Вопрос: {st.session_state[q_key]}\nОтвет: {user_any_ans}. Проверь строго.")
-                terminal_print(eval_res)
-                
-                if st.session_state.any_count < 10:
-                    st.button("Следующий вопрос ⏭", on_click=lambda: st.session_state.update({"any_count": st.session_state.any_count + 1}))
-                else:
-                    st.balloons()
-                    st.success("Марафон окончен!")
-                    if st.button("🔄 Выбрать другую тему"):
-                        st.session_state.any_active = False
-                        st.rerun()
+        col_check, col_next = st.columns(2)
+        
+        if col_check.button("🧪 ПРОВЕРИТЬ"):
+            if user_quiz_ans:
+                with st.spinner("СУДЬЯ ДУМАЕТ..."):
+                    eval_q = f"Вопрос: {st.session_state[q_key]}\nОтвет игрока: {user_quiz_ans}. Оцени строго, дай краткую справку."
+                    print_terminal(call_ai("Ты эксперт в этой теме.", eval_q))
+        
+        if col_next.button("ДАЛЬШЕ ⏭"):
+            if q_num < 10:
+                st.session_state.quiz_count += 1
+                st.rerun()
+            else:
+                st.balloons()
+                st.success("МАРАФОН ОКОНЧЕН!")
+                if st.button("ВЕРНУТЬСЯ К ВЫБОРУ ТЕМ"):
+                    st.session_state.quiz_active = False
+                    st.rerun()
+
+    if st.session_state.quiz_active:
+        if st.sidebar.button("❌ ПРЕРВАТЬ ТЕСТ"):
+            st.session_state.quiz_active = False
+            st.rerun()
+
