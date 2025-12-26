@@ -273,19 +273,30 @@ st.title("🖥 AIS EXAM MASTER ELITE v3.0")
 tabs = st.tabs(["📖 БАЗА ЗНАНИЙ", "🎫 ЭКЗАМЕН-СИМУЛЯТОР", "🧪 AI ЛАБОРАТОРИЯ", "🌍 УНИВЕРСАЛЬНЫЙ ТЕСТ"])
 
 # --- ВКЛАДКА 1: УЧИТЬ ---
-with tabs[0]:
-    st.header("📚 Справочник специалиста")
-    cols = st.columns(2)
-    for i, num in enumerate(sorted(tickets_data.keys(), key=int)):
-        with cols[i % 2].expander(f"📦 БИЛЕТ №{num}"):
+with tab_study:
+    st.header("📖 Справочник: Теория + Практика")
+    
+    for num in sorted(tickets_data.keys(), key=int):
+        with st.expander(f"📘 БИЛЕТ №{num}"):
             d = tickets_data[num]
+            
+            # --- БЛОК АУДИО ---
+            # Путь к файлу на GitHub должен соответствовать папке audio
+            audio_file = f"audio/{num}.mp3"
+            if os.path.exists(audio_file):
+                st.audio(audio_file, format="audio/mp3")
+            else:
+                st.caption("🔈 Аудиофайл (audio/" + num + ".mp3) не найден в репозитории")
+            
+            # --- ТЕКСТ ---
             st.markdown(f"**Вопрос 1:** {d['q1']}")
             st.info(d['a1'])
             st.markdown(f"**Вопрос 2:** {d['q2']}")
             st.info(d['a2'])
-            st.markdown("---")
-            st.success(f"🛠 **ПРАКТИКА:** {d['pract']}")
-            st.warning(f"📝 **АЛГОРИТМ:** {d['p_sol']}")
+            st.markdown("**🛠 ПРАКТИКА:**")
+            st.success(d['pract'])
+            st.markdown("**📝 АЛГОРИТМ:**")
+            st.code(d['p_sol'])
 
 # --- ВКЛАДКА 2: ЭКЗАМЕН ---
 with tabs[1]:
@@ -401,6 +412,7 @@ with tabs[3]:
         if st.sidebar.button("❌ ПРЕРВАТЬ ТЕСТ"):
             st.session_state.quiz_active = False
             st.rerun()
+
 
 
 
